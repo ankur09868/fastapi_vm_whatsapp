@@ -1,7 +1,5 @@
 from fastapi import FastAPI
-from router import groups_details
-from router import bot_config as bot
-from router import schedule_message as sch_msg
+from router import groups_details,bot_config as bot,schedule_message as sch_msg,dashboard
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -20,6 +18,7 @@ app.add_middleware(
 
 
 # Include routers
+app.include_router(dashboard.dashboard_router)
 app.include_router(groups_details.router,prefix="/group_details")
 app.include_router(bot.router,prefix="/bot_details")
 app.include_router(sch_msg.router,prefix="/schedule_message")
