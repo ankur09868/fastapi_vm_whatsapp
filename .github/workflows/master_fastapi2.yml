@@ -2,7 +2,7 @@
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 # More info on Python, GitHub Actions, and Azure App Service: https://aka.ms/python-webapps-actions
 
-name: Build and deploy Python app to Azure Web App - fastapimine
+name: Build and deploy Python app to Azure Web App - fastapi2
 
 on:
   push:
@@ -65,14 +65,14 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_C8880B868F7547D997721C9AF40C331F }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A32F06F00757466D80A2C34E9D6DFDB6 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_E5BF53A670CD45878819BA96787077C0 }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_C65747E7B4584EAA9511EE6952885BA8 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_13395ED4AF5545E3AABB46FE0F859DCD }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_7F39C27727D64994B77327E4178C6020 }}
 
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
-          app-name: 'fastapimine'
+          app-name: 'fastapi2'
           slot-name: 'Production'
           
