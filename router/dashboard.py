@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException
-from modules.model.dashboard import DashboardResponse, SentimentData
+from modules.model.dashboard import DashboardResponse, SentimentData, EngagementData
 from modules.config.database import conn_config
 import psycopg2
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List
 
 # Initialize the router
@@ -32,10 +32,10 @@ async def get_dashboard():
             # Fetch sentiment data for the group
             cursor.execute("""
                 SELECT message_time, 
-                    SUM(CASE WHEN sentiment_data->>'sentiment' = 'Positive' THEN 1 ELSE 0 END) AS Positive,
-                    SUM(CASE WHEN sentiment_data->>'sentiment' = 'Neutral' THEN 1 ELSE 0 END) AS Neutral,
-                    SUM(CASE WHEN sentiment_data->>'sentiment' = 'Negative' THEN 1 ELSE 0 END) AS Negative,
-                    SUM(CASE WHEN sentiment_data->>'sentiment' = 'Commercial' THEN 1 ELSE 0 END) AS Commercial
+                    COALESCE(SUM((sentiment_data->>'Positive')::int), 0) AS Positive,
+                    COALESCE(SUM((sentiment_data->>'Neutral')::int), 0) AS Neutral,
+                    COALESCE(SUM((sentiment_data->>'Negative')::int), 0) AS Negative,
+                    COALESCE(SUM((sentiment_data->>'Commercial')::int), 0) AS Commercial
                 FROM whatsapp_messages
                 WHERE group_name = %s
                 GROUP BY message_time
@@ -65,14 +65,72 @@ async def get_dashboard():
 
             topics_data = [{"topic": topic, "frequency": frequency} for topic, frequency in cursor.fetchall()]
 
+            # Engagement Data Calculation
+            seven_days_ago = datetime.now() - timedelta(days=7)
+            cursor.execute("""
+                SELECT DISTINCT phone_number
+                FROM whatsapp_messages
+                WHERE group_name = %s AND message_time >= %s
+            """, (group_name_str, seven_days_ago))
+
+            active_members = cursor.fetchall()
+            active_members_count = len(active_members)
+
+            # Total Members: Assuming there is a "members" table or data to get the total number of group members
+            cursor.execute("""
+                SELECT COUNT(DISTINCT phone_number)
+                FROM whatsapp_messages
+                WHERE group_name = %s
+            """, (group_name_str,))
+            total_members = cursor.fetchone()[0]
+
+            # Active Member Score Calculation
+            if total_members > 0:
+                active_member_score = (active_members_count / total_members) * 100
+            else:
+                active_member_score = 0
+
+            # Engagement Rate: Assuming it's the ratio of active messages to total messages in the last 7 days
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM whatsapp_messages
+                WHERE group_name = %s AND message_time >= %s
+            """, (group_name_str, seven_days_ago))
+            total_messages_last_7_days = cursor.fetchone()[0]
+
+            if total_messages_last_7_days > 0:
+                engagement_rate = (active_members_count / total_messages_last_7_days) * 100
+            else:
+                engagement_rate = 0
+
+
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM whatsapp_messages
+                WHERE group_name = %s  AND message_time >= %s
+            """, (group_name_str, seven_days_ago))
+            response_messages = cursor.fetchone()[0]
+
+            if total_messages_last_7_days > 0:
+                response_rate = (response_messages / total_messages_last_7_days) * 100
+            else:
+                response_rate = 0
+
+            # Create engagement data
+            engagement_data = [
+                {"metric": "Active Members", "score": active_member_score},
+                {"metric": "Engagement Rate", "score": engagement_rate},
+                {"metric": "Response Rate", "score": response_rate}
+            ]
+
             # Append the group data to the response list
             dashboard_data.append(DashboardResponse(
-                name=group_name_str,  # Group name retrieved from the DB
+                name=group_name_str,
                 sentimentData=sentiment_data,
+                engagementData=engagement_data, 
                 topicsData=topics_data
             ))
 
-        # Return the entire dashboard data as a list of DashboardResponse
         return dashboard_data
 
     except Exception as e:
