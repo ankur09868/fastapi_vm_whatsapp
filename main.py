@@ -3,10 +3,11 @@ from router import groups_details
 from router import bot_config as bot
 from router import schedule_message as sch_msg
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
+
 
 # Create the FastAPI app
 app = FastAPI(title="WhatsApp Automation API")
+
 
 # Configure CORS middleware
 app.add_middleware(
@@ -17,10 +18,12 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
+
 # Include routers
-app.include_router(groups_details.router, prefix="/group_details")
-app.include_router(bot.router, prefix="/bot_details")
-app.include_router(sch_msg.router, prefix="/schedule_message")
+app.include_router(groups_details.router,prefix="/group_details")
+app.include_router(bot.router,prefix="/bot_details")
+app.include_router(sch_msg.router,prefix="/schedule_message")
+
 
 # Application startup event
 @app.on_event("startup")
@@ -31,7 +34,3 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     print("Application shutting down...")
-
-# Run the application with Uvicorn on port 8181
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8181)
