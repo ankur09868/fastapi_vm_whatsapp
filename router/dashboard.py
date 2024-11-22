@@ -79,8 +79,8 @@ async def get_dashboard():
             # Total Members: Assuming there is a "members" table or data to get the total number of group members
             cursor.execute("""
                 SELECT COUNT(DISTINCT phone_number)
-                FROM whatsapp_messages
-                WHERE group_name = %s
+                FROM whatsapp_group_members
+                WHERE group_id = (SELECT group_id FROM whatsapp_groups WHERE group_name = %s)
             """, (group_name_str,))
             total_members = cursor.fetchone()[0]
 

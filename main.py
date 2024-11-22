@@ -20,7 +20,7 @@ app.add_middleware(
 # Include routers
 app.include_router(dashboard.dashboard_router)
 app.include_router(groups_details.router,prefix="/group_details")
-app.include_router(bot.router,prefix="/bot_details")
+app.include_router(bot.bot_config_router,prefix="/bot_details")
 app.include_router(sch_msg.router,prefix="/schedule_message")
 
 

@@ -6,13 +6,11 @@ router = APIRouter()
 
 @router.get("/get_groups")
 async def get_groups():
-    """Fetch groups from the database and return as JSON."""
     groups = get_groups_from_db()  # Call the function to fetch data from the database
     return JSONResponse(content={"groups": groups})
 
 @router.get("/get_members")
 async def get_members():
-    """Fetch members from the database and return as JSON."""
     members = get_members_from_db()  # Fetch data from the database
     return JSONResponse(content={"members": members})
 
