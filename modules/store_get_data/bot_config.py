@@ -145,3 +145,80 @@ def fetch_bot_config_from_db():
             cursor.close()
         if conn:
             conn.close()
+
+
+def delete_bot_config(bot_id):
+    try:
+        # Connect to the PostgreSQL database
+        conn = psycopg2.connect(**conn_config)
+        cursor = conn.cursor()
+
+        # Check if the bot exists
+        cursor.execute("SELECT id FROM whatsapp_botconfig WHERE id = %s;", (bot_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail=f"Bot with ID {bot_id} not found")
+
+        # Delete the bot configuration
+        cursor.execute("DELETE FROM whatsapp_botconfig WHERE id = %s;", (bot_id,))
+        conn.commit()
+
+        return {"message": f"Bot with ID {bot_id} and its logs deleted successfully"}
+
+    except Exception as e:
+        print(f"Error occurred while deleting bot config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def updata_bot_config(bot_id,bot):
+    try:
+        # Connect to the PostgreSQL database
+        conn = psycopg2.connect(**conn_config)
+        cursor = conn.cursor()
+
+        # Check if the bot exists
+        cursor.execute("SELECT id FROM whatsapp_botconfig WHERE id = %s;", (bot_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail=f"Bot with ID {bot_id} not found")
+
+        # Prepare the update query
+        update_query = """
+        UPDATE whatsapp_botconfig
+        SET name = COALESCE(%s, name),
+            isbotenabled = COALESCE(%s, isbotenabled),
+            spamkeywords = COALESCE(%s, spamkeywords),
+            messagelimit = COALESCE(%s, messagelimit),
+            replymessage = COALESCE(%s, replymessage),
+            spamaction = COALESCE(%s, spamaction)
+        WHERE id = %s
+        """
+        cursor.execute(
+            update_query,
+            (
+                bot.name,
+                bot.isBotEnabled,
+                json.dumps(bot.spamKeywords) if bot.spamKeywords else None,
+                bot.messageLimit,
+                bot.replyMessage,
+                bot.spamAction,
+                bot_id,
+            ),
+        )
+        conn.commit()
+
+        return {"message": f"Bot with ID {bot_id} updated successfully"}
+
+    except Exception as e:
+        print(f"Error occurred while updating bot config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+   
