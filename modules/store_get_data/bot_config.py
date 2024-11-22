@@ -1,38 +1,147 @@
 import psycopg2
 from modules.config.database import conn_config
 from fastapi import HTTPException
-# Function to insert new bot configuration (word and reply) into the database
-def connection():
-    try:
-        conn = psycopg2.connect(**conn_config)
-        cursor = conn.cursor()
-    except:
-        pass
+from modules.model.bot_config import BotConfig,BotLog,BotConfigResponse
+import json
 
-def store_bot_config(word: str, reply_message: str):
+def store_bot_config(bot:BotConfig):
     try:
-        # Connect to PostgreSQL database
+        # Connect to the PostgreSQL database
         conn = psycopg2.connect(**conn_config)
         cursor = conn.cursor()
 
-        # Query to insert the word and reply_message into the whatsapp_botconfig table
+        is_bot_enabled = bot.isBotEnabled if bot.isBotEnabled is not None else True  # Default to True if not provided
+        spam_keywords = json.dumps(bot.spamKeywords) if bot.spamKeywords else ['spam'] # Convert list to JSON or None
+        message_limit = bot.messageLimit if bot.messageLimit is not None else 5  # Handle None for integer
+        reply_message = bot.replyMessage if bot.replyMessage else None  # Handle None for string
+        spam_action = bot.spamAction if bot.spamAction else None  # Handle None for string
+
+        logs = bot.logs if bot.logs else []
+
+        # Log the values being inserted
+        print(f"Inserting bot data: {bot.name}, {is_bot_enabled}, {spam_keywords}, {message_limit}, {reply_message}, {spam_action}")
+
+        # Insert bot data into the database
+        insert_query = """
+        INSERT INTO whatsapp_botconfig (name, isbotenabled, spamkeywords, messagelimit, replymessage, spamaction)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """
         cursor.execute(
-            "INSERT INTO whatsapp_botconfig (word, reply_message) VALUES (%s, %s)",
-            (word, reply_message)
+            insert_query,
+            (
+                bot.name,
+                is_bot_enabled,  
+                spam_keywords,   # Either JSON or None
+                message_limit,   # Either integer or None
+                reply_message,   # Either string or None
+                spam_action      # Either string or None
+            ),
         )
+        conn.commit()  # Commit the transaction
 
-        # Commit the transaction
-        conn.commit()
+        # Return success response
+        return {"message": f"Bot {bot.name} added successfully"}
 
-        # Close the database connection
-        conn.close()
-        return {"message": "Bot configuration saved successfully."}
     except Exception as e:
-        print(f"Error saving bot configuration to database: {e}")
-        raise HTTPException(status_code=500, detail="Error saving bot configuration.")
+        print(f"Error occurred: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
     
 def fetch_bot_config_from_db():
     try:
-        pass
-    except:
-        pass
+        # Connect to the PostgreSQL database
+        conn = psycopg2.connect(**conn_config)
+        cursor = conn.cursor()
+
+        # Fetch all bot configurations
+        cursor.execute("""
+            SELECT id, name, isBotEnabled, spamKeywords, messageLimit, replyMessage, spamAction
+            FROM whatsapp_botconfig;
+        """)
+        bot_configs = cursor.fetchall()
+        print(f"Fetched bot configurations: {bot_configs}")
+
+        if not bot_configs:
+            raise HTTPException(status_code=404, detail="No bot configurations found")
+
+        # Prepare a list to hold the bot data
+        bots = []
+
+        # Fetch logs for each bot
+        for bot in bot_configs:
+            bot_id, name, is_bot_enabled, spam_keywords, message_limit, reply_message, spam_action = bot
+            print(f"Processing bot with id={bot_id}, name={name}")
+
+            # Ensure spamKeywords is a list (convert from set or string if necessary)
+            if spam_keywords is None:
+                spam_keywords = []  # Default to empty list if None
+            elif isinstance(spam_keywords, set):
+                spam_keywords = list(spam_keywords)  # Convert set to list
+            elif isinstance(spam_keywords, str):
+                try:
+                    spam_keywords = json.loads(spam_keywords) if spam_keywords else []
+                except Exception as e:
+                    print(f"Error parsing spamKeywords for bot {bot_id}: {str(e)}")
+                    spam_keywords = []  # Use empty list if parsing fails
+
+            print(f"spam_keywords for bot {bot_id}: {spam_keywords}")
+
+            # Fetch logs related to this bot
+            cursor.execute("""
+                SELECT id, message, action, phone_or_name
+                FROM whatsapp_bot_logs
+                WHERE bot_id = %s;
+            """, (bot_id,))
+            logs = cursor.fetchall()
+            print(f"Fetched logs for bot {bot_id}: {logs}")
+
+            # Check if logs are returned correctly
+            if not logs:
+                print(f"No logs found for bot {bot_id}")
+
+            # Create BotLog objects for each log entry
+            bot_logs = [
+                BotLog(
+                    id=log_id,
+                    message=message,
+                    action=action,
+                    phone_or_name=phone_or_name or None  # Use None if phone_or_name is empty or NULL
+                )
+                for log_id, message, action, phone_or_name in logs
+            ]
+            
+            # Debug: Check if logs are being populated correctly
+            print(f"Logs for bot {bot_id}: {bot_logs}")
+
+            # Add the bot configuration and logs to the list
+            bots.append(
+                BotConfig(
+                    id=bot_id,
+                    name=name,
+                    isBotEnabled=is_bot_enabled,
+                    logs=bot_logs,  # Attach the logs to the bot
+                    spamKeywords=spam_keywords,
+                    messageLimit=message_limit,
+                    replyMessage=reply_message,
+                    spamAction=spam_action
+                )
+            )
+
+        # Return the response with the bot configurations and their logs
+        return BotConfigResponse(bots=bots)
+
+    except Exception as e:
+        print(f"Error occurred: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+    finally:
+        # Ensure proper cleanup
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()

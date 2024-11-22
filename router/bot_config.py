@@ -1,14 +1,26 @@
+from fastapi import APIRouter, HTTPException, status
+from typing import List
 import psycopg2
-from fastapi import APIRouter, HTTPException, Body
 from modules.config.database import conn_config
-from modules.model.bot_config import BotConfig
-from modules.store_get_data.bot_config import store_bot_config
+from modules.store_get_data.bot_config import fetch_bot_config_from_db,store_bot_config
+from modules.model.bot_config import BotConfigResponse,BotConfig
+import json
 
 # Initialize the FastAPI router
-router = APIRouter()
+bot_config_router = APIRouter()
 
-# FastAPI POST endpoint to accept word and reply_message from frontend
-@router.post("/store_bot_data")
-async def create_bot_config(bot_config: BotConfig):
-    response = store_bot_config(bot_config.word, bot_config.reply_message)
-    return response
+@bot_config_router.get("/get_bot_config", response_model=BotConfigResponse)
+async def get_bot_config():
+    try:
+        bot_config = fetch_bot_config_from_db()
+        return bot_config
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f" {str(e)}")
+    
+@bot_config_router.post("/add_bot_config",status_code=status.HTTP_201_CREATED)
+async def add_bot_config(bot:BotConfig):
+    try:
+        add_bot = store_bot_config(bot)
+        return add_bot
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=f"")
