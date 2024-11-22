@@ -27,4 +27,3 @@ async def get_schedule_messages():
             status_code=500,
             detail=f"Internal Server Error: {str(e)}",
         )
-
