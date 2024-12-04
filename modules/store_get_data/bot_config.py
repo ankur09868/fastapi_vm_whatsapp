@@ -15,16 +15,19 @@ def store_bot_config(bot:BotConfig):
         message_limit = bot.messageLimit if bot.messageLimit is not None else 5  # Handle None for integer
         reply_message = bot.replyMessage if bot.replyMessage else None  # Handle None for string
         spam_action = bot.spamAction if bot.spamAction else None  # Handle None for string
+        ai_detection = bot.aidetection if bot.aidetection is not None else False
+        ai_reply = bot.aireply if bot.aireply is not None else False
+        prompt = bot.prompt if bot.prompt else ""
 
         logs = bot.logs if bot.logs else []
 
         # Log the values being inserted
-        print(f"Inserting bot data: {bot.name}, {is_bot_enabled}, {spam_keywords}, {message_limit}, {reply_message}, {spam_action}")
+        print(f"Inserting bot data: {bot.name}, {is_bot_enabled}, {spam_keywords}, {message_limit}, {reply_message}, {spam_action},{ai_detection},{ai_reply},{prompt}")
 
         # Insert bot data into the database
         insert_query = """
-        INSERT INTO whatsapp_botconfig (name, isbotenabled, spamkeywords, messagelimit, replymessage, spamaction)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO whatsapp_botconfig (name, isbotenabled, spamkeywords, messagelimit, replymessage, spamaction,ai_detection,ai_reply,prompt)
+        VALUES (%s, %s, %s, %s, %s, %s,%s,%s,%s)
         """
         cursor.execute(
             insert_query,
@@ -34,7 +37,11 @@ def store_bot_config(bot:BotConfig):
                 spam_keywords,   # Either JSON or None
                 message_limit,   # Either integer or None
                 reply_message,   # Either string or None
-                spam_action      # Either string or None
+                spam_action,      # Either string or None
+                ai_detection,
+                ai_reply,
+                prompt
+                
             ),
         )
         conn.commit()  # Commit the transaction
@@ -60,7 +67,7 @@ def fetch_bot_config_from_db():
 
         # Fetch all bot configurations
         cursor.execute("""
-            SELECT id, name, isBotEnabled, spamKeywords, messageLimit, replyMessage, spamAction
+            SELECT *
             FROM whatsapp_botconfig;
         """)
         bot_configs = cursor.fetchall()
@@ -74,7 +81,7 @@ def fetch_bot_config_from_db():
 
         # Fetch logs for each bot
         for bot in bot_configs:
-            bot_id, name, is_bot_enabled, spam_keywords, message_limit, reply_message, spam_action = bot
+            bot_id, name, is_bot_enabled, spam_keywords, message_limit, reply_message, spam_action,ai_detection,ai_reply,prompt = bot
             print(f"Processing bot with id={bot_id}, name={name}")
 
             # Ensure spamKeywords is a list (convert from set or string if necessary)
@@ -128,7 +135,10 @@ def fetch_bot_config_from_db():
                     spamKeywords=spam_keywords,
                     messageLimit=message_limit,
                     replyMessage=reply_message,
-                    spamAction=spam_action
+                    spamAction=spam_action,
+                    aidetection=ai_detection,
+                    aireply=ai_reply,
+                    prompt=prompt
                 )
             )
 
@@ -173,8 +183,64 @@ def delete_bot_config(bot_id):
             cursor.close()
         if conn:
             conn.close()
+def get_bots():
+    try:
+        # Connect to the PostgreSQL database
+        conn = psycopg2.connect(**conn_config)
+        cursor = conn.cursor()
 
-def updata_bot_config(bot_id,bot):
+       # Fetch all bot configurations
+        cursor.execute("""
+            SELECT *
+            FROM whatsapp_botconfig;
+        """)
+        bot_configs = cursor.fetchall()
+        print(f"Fetched bot configurations: {bot_configs}")
+
+        if not bot_configs:
+            raise HTTPException(status_code=404, detail="No bot configurations found")
+
+        # Prepare a list to hold the bot data
+        bots = []
+
+        # Fetch logs for each bot
+        for bot in bot_configs:
+            bot_id, name, is_bot_enabled, spam_keywords, message_limit, reply_message, spam_action,ai_detection,ai_reply,prompt = bot
+            print(f"Processing bot with id={bot_id}, name={name}")
+        
+           # Add the bot configuration and logs to the list
+            bots.append(
+                BotConfig(
+                    id=bot_id,
+                    name=name,
+                    isBotEnabled=is_bot_enabled,
+                    spamKeywords=spam_keywords,
+                    messageLimit=message_limit,
+                    replyMessage=reply_message,
+                    spamAction=spam_action,
+                    aidetection=ai_detection,
+                    aireply=ai_reply,
+                    prompt=prompt
+                )
+            )
+
+        # Return the list of bots
+        return {"bots": bots}
+
+    except Exception as e:
+        print(f"Error occurred: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+    finally:
+        # Ensure proper cleanup
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+
+def update_bot_config(bot_id,bot):
     try:
         # Connect to the PostgreSQL database
         conn = psycopg2.connect(**conn_config)

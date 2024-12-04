@@ -234,7 +234,7 @@ def get_groups_from_db():
         # Query to get all groups and their members
         cursor.execute("""
             SELECT g.id, g.group_name, g.group_description, 
-                   m.id as member_id, m.name, m.phone_number, m.role, m.status, m.rating, m.avatar
+                m.member_id, m.name, m.phone_number, m.role, m.status, m.rating, m.avatar
             FROM whatsapp_groups g
             LEFT JOIN whatsapp_group_members m ON g.id = m.group_id;
         """)

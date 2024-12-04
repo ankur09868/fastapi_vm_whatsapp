@@ -8,14 +8,16 @@ class BotLog(BaseModel):
     phone_or_name : Optional[str] = None
 
 class BotConfig(BaseModel):
-    id:int
-    name: str
+    name: Optional[str] = None 
     isBotEnabled: Optional[bool] = True
     spamKeywords: Optional[List[str]] = ['spam']
     messageLimit: Optional[int] = 5
     replyMessage: Optional[str] = None
     spamAction: Optional[str] = None
+    aidetection:Optional[bool] =False
+    aireply: Optional[bool] =False
+    prompt:Optional[str] = None
     logs: Optional[List[BotLog]] = []
-
+    
 class BotConfigResponse(BaseModel):
     bots: List[BotConfig]

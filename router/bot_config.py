@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 from typing import List
 import psycopg2
 from modules.config.database import conn_config
-from modules.store_get_data.bot_config import fetch_bot_config_from_db,store_bot_config,delete_bot_config,updata_bot_config
+from modules.store_get_data.bot_config import fetch_bot_config_from_db,store_bot_config,delete_bot_config,update_bot_config,get_bots
 from modules.model.bot_config import BotConfigResponse,BotConfig
 import json
 
@@ -22,6 +22,18 @@ async def get_bot_config():
     except Exception as e:
         # Raise a detailed 500 Internal Server Error with the exception message
         raise HTTPException(status_code=500, detail=f"Error fetching bot configuration: {str(e)}")
+    
+@bot_config_router.get("/get_bots",response_model=BotConfig)
+async def get_bot():
+    try:
+        bot = get_bots()
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bots not found")
+        return bot
+    except Exception as e:
+        # Raise a detailed 500 Internal Server Error with the exception message
+        raise HTTPException(status_code=500, detail=f"Error fetching bots: {str(e)}")
+
 
 @bot_config_router.post("/add_bot_config", status_code=status.HTTP_201_CREATED)
 async def add_bot_config(bot: BotConfig):
@@ -53,7 +65,7 @@ async def delete_botConfig(bot_id: int):
 async def update_botConfig(bot_id: int, bot: BotConfig):
     try:
         # Assuming update_bot_config returns None or some indication when the bot is not found
-        update_bot = updata_bot_config(bot_id, bot)
+        update_bot = update_bot_config(bot_id, bot)
         if not update_bot:
             # If the bot is not found, raise a 404 error with a custom message
             raise HTTPException(status_code=404, detail=f"Bot with ID {bot_id} not found")
