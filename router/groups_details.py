@@ -34,4 +34,11 @@ async def get_activity(group_name:str):
     else:
          raise HTTPException(status_code=404, detail=f"Group with ID {id} not found")
 
-    
+# @router.delete("/delete_group/{group_name}")
+# async def delete_group(group_name:str):
+#     del_grp = delete_grp(group_name)
+
+#     if del_grp :
+#         return {"message": "Group delete successfully", "data": del_grp}
+#     else:
+#          raise HTTPException(status_code=404, detail=f"Group with ID {id} not found")
