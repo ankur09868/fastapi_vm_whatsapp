@@ -1,12 +1,13 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import ValidationError
-from datetime import datetime,timedelta
+from datetime import datetime
 import psycopg2
 from modules.config.database import conn_config
 from modules.model.schedule_model import ScheduleMessageRequest
 import json 
 import mimetypes
 import validators
+import pytz
 
 
 def save_scheduled_message_to_db(data: ScheduleMessageRequest):
@@ -75,25 +76,26 @@ def save_scheduled_message_to_db(data: ScheduleMessageRequest):
             groups = ', '.join(data.groups)
         else:
             raise HTTPException(status_code=400, detail="Groups must be provided as a list.")
-        # Adjust scheduled time by adding 5 hours 30 minutes
+        
+        # Convert the scheduledTime to Asia/Kolkata time zone
         if data.scheduledTime:
-            try:
-                # If scheduledTime is already a datetime object, use it directly
-                if isinstance(data.scheduledTime, datetime):
-                    scheduled_time = data.scheduledTime
-                else:
-                    # If it's a string, convert it to a datetime object
-                    scheduled_time = datetime.strptime(data.scheduledTime, "%Y-%m-%d %H:%M:%S")
+            if isinstance(data.scheduledTime, str):
+                # Parse string to datetime
+                scheduled_time_utc = datetime.strptime(data.scheduledTime, "%Y-%m-%d %H:%M:%S")
+            elif isinstance(data.scheduledTime, datetime):
+                # Already a datetime object
+                scheduled_time_utc = data.scheduledTime
+            else:
+                raise HTTPException(status_code=400, detail="Invalid format for scheduledTime. Must be a string or datetime.")
 
-                # Add 5 hours 30 minutes
-                adjusted_time = scheduled_time + timedelta(hours=5, minutes=30)
-                # Convert back to string in the same format
-                adjusted_time_str = adjusted_time.strftime("%Y-%m-%d %H:%M:%S")
-            except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid scheduledTime format.")
+            # Convert to Asia/Kolkata timezone
+            kolkata_tz = pytz.timezone('Asia/Kolkata')
+            scheduled_time_kolkata = scheduled_time_utc.replace(tzinfo=pytz.utc).astimezone(kolkata_tz)
+            # Convert to string if needed
+            scheduled_time_str = scheduled_time_kolkata.strftime("%Y-%m-%d %H:%M:%S")
         else:
             raise HTTPException(status_code=400, detail="Scheduled time is required.")
-
+            
         # Connect to the database
         conn = psycopg2.connect(**conn_config)
         cursor = conn.cursor()
@@ -106,7 +108,7 @@ def save_scheduled_message_to_db(data: ScheduleMessageRequest):
         """
         cursor.execute(
             query,
-            (groups, data.messageType, data.content, adjusted_time_str, media_json, "pending"),
+            (groups, data.messageType, data.content, scheduled_time_str, media_json, "pending"),
         )
         message_id = cursor.fetchone()[0]
         conn.commit()

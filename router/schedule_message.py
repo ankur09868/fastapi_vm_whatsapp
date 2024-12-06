@@ -22,15 +22,18 @@ async def get_schedule_messages():
     try:
         # Attempt to retrieve all scheduled messages
         response = get_all_scheduled_messages()
+        
+        # If no messages are found, return an empty list
         if not response:
-            # If no scheduled messages are found, raise a 404 Not Found
-            raise HTTPException(status_code=404, detail="No scheduled messages found.")
+            return {"scheduled_messages": []}
+        
+        # Return the scheduled messages if found
         return {"scheduled_messages": response}
     
     except Exception as e:
         # Catch any other general exceptions
         print(f"Unexpected error occurred while fetching scheduled messages: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
     
     
 
