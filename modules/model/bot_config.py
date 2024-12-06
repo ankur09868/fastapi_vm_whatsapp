@@ -1,11 +1,14 @@
 from pydantic import BaseModel
 from typing import List, Optional
+from datetime import datetime
 
 class BotLog(BaseModel):
     id:int
     message: str  # Message content flagged as spam
     action: str  # Action taken (e.g., "Warned")
     phone_or_name : Optional[str] = None
+    group_name: Optional[str] = None
+    time: Optional[datetime] = None
 
 class BotConfig(BaseModel):
     name: Optional[str] = None 

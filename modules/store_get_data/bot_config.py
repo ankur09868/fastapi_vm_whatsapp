@@ -62,76 +62,82 @@ def store_bot_config(bot:BotConfig):
 def fetch_bot_config_from_db():
     try:
         # Connect to the PostgreSQL database
-        conn = psycopg2.connect(**conn_config)
-        cursor = conn.cursor()
+        with psycopg2.connect(**conn_config) as conn:
+            with conn.cursor() as cursor:
+                # Fetch all bot configurations
+                cursor.execute("""
+                    SELECT *
+                    FROM whatsapp_botconfig;
+                """)
+                bot_configs = cursor.fetchall()
+                print(f"Fetched bot configurations: {bot_configs}")
 
-        # Fetch all bot configurations
-        cursor.execute("""
-            SELECT *
-            FROM whatsapp_botconfig;
-        """)
-        bot_configs = cursor.fetchall()
-        print(f"Fetched bot configurations: {bot_configs}")
+                if not bot_configs:
+                    raise HTTPException(status_code=404, detail="No bot configurations found")
 
-        if not bot_configs:
-            raise HTTPException(status_code=404, detail="No bot configurations found")
+                # Fetch logs for all bots in a single query
+                cursor.execute("""
+                    SELECT 
+                        bot_id, 
+                        id, 
+                        message, 
+                        action, 
+                        phone_or_name, 
+                        group_name, 
+                        timestamp::timestamp(0) AS timestamp
+                    FROM 
+                        whatsapp_bot_logs;
+                """)
+                logs = cursor.fetchall()
+                print(f"Fetched all logs: {logs}")
 
-        # Prepare a list to hold the bot data
-        bots = []
-
-        # Fetch logs for each bot
-        for bot in bot_configs:
-            bot_id, name, is_bot_enabled, spam_keywords, message_limit, reply_message, spam_action,ai_detection,ai_reply,prompt = bot
-            print(f"Processing bot with id={bot_id}, name={name}")
-
-            # Ensure spamKeywords is a list (convert from set or string if necessary)
-            if spam_keywords is None:
-                spam_keywords = []  # Default to empty list if None
-            elif isinstance(spam_keywords, set):
-                spam_keywords = list(spam_keywords)  # Convert set to list
-            elif isinstance(spam_keywords, str):
-                try:
-                    spam_keywords = json.loads(spam_keywords) if spam_keywords else []
-                except Exception as e:
-                    print(f"Error parsing spamKeywords for bot {bot_id}: {str(e)}")
-                    spam_keywords = []  # Use empty list if parsing fails
-
-            print(f"spam_keywords for bot {bot_id}: {spam_keywords}")
-
-            # Fetch logs related to this bot
-            cursor.execute("""
-                SELECT id, message, action, phone_or_name
-                FROM whatsapp_bot_logs
-                WHERE bot_id = %s;
-            """, (bot_id,))
-            logs = cursor.fetchall()
-            print(f"Fetched logs for bot {bot_id}: {logs}")
-
-            # Check if logs are returned correctly
-            if not logs:
-                print(f"No logs found for bot {bot_id}")
-
-            # Create BotLog objects for each log entry
-            bot_logs = [
+        # Group logs by bot_id for faster processing
+        logs_by_bot = {}
+        for log in logs:
+            bot_id, log_id, message, action, phone_or_name, group_name, timestamp = log
+            if bot_id not in logs_by_bot:
+                logs_by_bot[bot_id] = []
+            logs_by_bot[bot_id].append(
                 BotLog(
                     id=log_id,
                     message=message,
                     action=action,
-                    phone_or_name=phone_or_name or None  # Use None if phone_or_name is empty or NULL
+                    phone_or_name=phone_or_name or None,  # Use None if phone_or_name is empty or NULL
+                    group_name=group_name or None,  # Ensure group_name is None if missing
+                    time=timestamp or None  # Ensure timestamp is None if missing
                 )
-                for log_id, message, action, phone_or_name in logs
-            ]
-            
-            # Debug: Check if logs are being populated correctly
+            )
+
+        # Prepare BotConfig objects
+        bots = []
+        for bot in bot_configs:
+            # Adjust unpacking to match the actual columns returned
+            bot_id, name, is_bot_enabled, spam_keywords, message_limit, reply_message, spam_action, ai_detection, ai_reply, prompt = bot
+            print(f"Processing bot with id={bot_id}, name={name}")
+
+            # Parse spam_keywords
+            if spam_keywords is None:
+                spam_keywords = []
+            elif isinstance(spam_keywords, str):
+                try:
+                    spam_keywords = json.loads(spam_keywords) if spam_keywords else []
+                except json.JSONDecodeError:
+                    print(f"Error parsing spamKeywords for bot {bot_id}, defaulting to empty list.")
+                    spam_keywords = []
+
+            print(f"spam_keywords for bot {bot_id}: {spam_keywords}")
+
+            # Get logs for this bot
+            bot_logs = logs_by_bot.get(bot_id, [])
             print(f"Logs for bot {bot_id}: {bot_logs}")
 
-            # Add the bot configuration and logs to the list
+            # Add bot configuration to the list
             bots.append(
                 BotConfig(
                     id=bot_id,
                     name=name,
                     isBotEnabled=is_bot_enabled,
-                    logs=bot_logs,  # Attach the logs to the bot
+                    logs=bot_logs,
                     spamKeywords=spam_keywords,
                     messageLimit=message_limit,
                     replyMessage=reply_message,
@@ -145,9 +151,14 @@ def fetch_bot_config_from_db():
         # Return the response with the bot configurations and their logs
         return BotConfigResponse(bots=bots)
 
+    except psycopg2.DatabaseError as e:
+        print(f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     except Exception as e:
-        print(f"Error occurred: {str(e)}")
+        print(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+
 
     finally:
         # Ensure proper cleanup
