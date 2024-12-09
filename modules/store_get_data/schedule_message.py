@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException,Request
 from pydantic import ValidationError
 from datetime import datetime
 import psycopg2
@@ -10,7 +10,7 @@ import validators
 import pytz
 
 
-def save_scheduled_message_to_db(data: ScheduleMessageRequest):
+def save_scheduled_message_to_db(data: ScheduleMessageRequest,tenant_id):
     try:
         # Validate messageType and media
         media = data.media
@@ -100,15 +100,34 @@ def save_scheduled_message_to_db(data: ScheduleMessageRequest):
         conn = psycopg2.connect(**conn_config)
         cursor = conn.cursor()
 
+        create = """
+            CREATE TABLE IF NOT EXISTS whatsapp_scheduled_messages (
+                id SERIAL PRIMARY KEY,
+                groups TEXT NOT NULL,
+                message_type TEXT NOT NULL,
+                message_content TEXT NOT NULL,
+                schedule_time TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+                created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
+                updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
+                status TEXT DEFAULT 'false',
+                media JSON,
+                tenant_id VARCHAR(50) NOT NULL,
+                CONSTRAINT fk_tenant FOREIGN KEY (tenant_id) REFERENCES tenant_tenant (tenant_id)
+                    ON DELETE CASCADE
+                    ON UPDATE CASCADE
+            );
+                
+        """
+
         # Insert the scheduled message into the database
         query = """
-        INSERT INTO whatsapp_scheduled_messages (groups, message_type, message_content, schedule_time, media, status)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO whatsapp_scheduled_messages (groups, message_type, message_content, schedule_time, media, tenant_id,status)
+        VALUES (%s, %s, %s, %s, %s, %s,%s)
         RETURNING id;
         """
         cursor.execute(
             query,
-            (groups, data.messageType, data.content, scheduled_time_str, media_json, "pending"),
+            (groups, data.messageType, data.content, scheduled_time_str, media_json,tenant_id, "pending"),
         )
         message_id = cursor.fetchone()[0]
         conn.commit()
@@ -124,15 +143,20 @@ def save_scheduled_message_to_db(data: ScheduleMessageRequest):
             conn.close()  # Ensure the connection is closed
 
     
-def get_all_scheduled_messages():
+def get_all_scheduled_messages(tenant_id):
     try:
         # Connect to the database
         conn = psycopg2.connect(**conn_config)
         cursor = conn.cursor()
 
         # Fetch all scheduled messages
-        query = "SELECT id, groups, message_type, message_content, schedule_time, status, media FROM whatsapp_scheduled_messages;"
-        cursor.execute(query)
+        query = """
+        SELECT id, groups, message_type, message_content, schedule_time, status, media 
+        FROM whatsapp_scheduled_messages
+        where tenant_id = %s;
+        
+        """
+        cursor.execute(query,(tenant_id,))
         messages = cursor.fetchall()
 
         # Map the results to a list of dictionaries
@@ -156,7 +180,7 @@ def get_all_scheduled_messages():
         raise HTTPException(status_code=500, detail="Failed to fetch scheduled messages")
     
 
-def update_schedule_message(message_id,updated_message):
+def update_schedule_message(message_id,updated_message,tenant_id):
     try:
         # Enforce media presence for specific message types
         if updated_message.messageType in ["image", "document", "video"]:
@@ -171,7 +195,7 @@ def update_schedule_message(message_id,updated_message):
         cursor = conn.cursor()
 
         # Prepare media details
-        media_url = updated_message.media.url if updated_message.media else None
+        media_url = str(updated_message.media.url) if updated_message.media and updated_message.media.url else None
         media_type = updated_message.media.type if updated_message.media else None
         media_name = updated_message.media.name if updated_message.media else None
 
@@ -181,12 +205,10 @@ def update_schedule_message(message_id,updated_message):
         SET 
             groups = %s,
             message_type = %s,
-            content = %s,
-            media_url = %s,
-            media_type = %s,
-            media_name = %s,
+            message_content = %s,
+            media = %s,
             scheduled_time = %s
-        WHERE id = %s
+        WHERE id = %s and tenant_id =%s
         """
         cursor.execute(
             update_query,
@@ -199,6 +221,7 @@ def update_schedule_message(message_id,updated_message):
                 media_name,
                 updated_message.scheduledTime,
                 message_id,
+                tenant_id
             ),
         )
 

@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from modules.model.bot_config import BotConfig,BotLog,BotConfigResponse
 import json
 
-def store_bot_config(bot:BotConfig):
+def store_bot_config(bot:BotConfig,tenant_id):
     try:
         # Connect to the PostgreSQL database
         conn = psycopg2.connect(**conn_config)
@@ -18,16 +18,17 @@ def store_bot_config(bot:BotConfig):
         ai_detection = bot.aidetection if bot.aidetection is not None else False
         ai_reply = bot.aireply if bot.aireply is not None else False
         prompt = bot.prompt if bot.prompt else ""
+        tenant_id = tenant_id
 
         logs = bot.logs if bot.logs else []
 
         # Log the values being inserted
-        print(f"Inserting bot data: {bot.name}, {is_bot_enabled}, {spam_keywords}, {message_limit}, {reply_message}, {spam_action},{ai_detection},{ai_reply},{prompt}")
+        print(f"Inserting bot data: {bot.name}, {is_bot_enabled}, {spam_keywords}, {message_limit}, {reply_message}, {spam_action},{ai_detection},{ai_reply},{prompt},{tenant_id}")
 
         # Insert bot data into the database
         insert_query = """
-        INSERT INTO whatsapp_botconfig (name, isbotenabled, spamkeywords, messagelimit, replymessage, spamaction,ai_detection,ai_reply,prompt)
-        VALUES (%s, %s, %s, %s, %s, %s,%s,%s,%s)
+        INSERT INTO whatsapp_botconfig (name, isbotenabled, spamkeywords, messagelimit, replymessage, spamaction,ai_detection,ai_reply,prompt,tenant_id)
+        VALUES (%s, %s, %s, %s, %s, %s,%s,%s,%s,%s)
         """
         cursor.execute(
             insert_query,
@@ -40,7 +41,8 @@ def store_bot_config(bot:BotConfig):
                 spam_action,      # Either string or None
                 ai_detection,
                 ai_reply,
-                prompt
+                prompt,
+                tenant_id
                 
             ),
         )
@@ -59,7 +61,7 @@ def store_bot_config(bot:BotConfig):
         if conn:
             conn.close()
     
-def fetch_bot_config_from_db():
+def fetch_bot_config_from_db(tenant_id):
     try:
         # Connect to the PostgreSQL database
         with psycopg2.connect(**conn_config) as conn:
@@ -67,8 +69,9 @@ def fetch_bot_config_from_db():
                 # Fetch all bot configurations
                 cursor.execute("""
                     SELECT *
-                    FROM whatsapp_botconfig;
-                """)
+                    FROM whatsapp_botconfig
+                    WHERE tenant_id = %s;
+                """,(tenant_id,))
                 bot_configs = cursor.fetchall()
                 print(f"Fetched bot configurations: {bot_configs}")
 
@@ -86,8 +89,10 @@ def fetch_bot_config_from_db():
                         group_name, 
                         timestamp::timestamp(0) AS timestamp
                     FROM 
-                        whatsapp_bot_logs;
-                """)
+                        whatsapp_bot_logs
+                    WHERE 
+                        tenant_id = %s;
+                """,(tenant_id,))
                 logs = cursor.fetchall()
                 print(f"Fetched all logs: {logs}")
 
@@ -168,19 +173,19 @@ def fetch_bot_config_from_db():
             conn.close()
 
 
-def delete_bot_config(bot_id):
+def delete_bot_config(bot_id,tenant_id):
     try:
         # Connect to the PostgreSQL database
         conn = psycopg2.connect(**conn_config)
         cursor = conn.cursor()
 
         # Check if the bot exists
-        cursor.execute("SELECT id FROM whatsapp_botconfig WHERE id = %s;", (bot_id,))
+        cursor.execute("SELECT id FROM whatsapp_botconfig WHERE id = %s AND tenant_id = %s;", (bot_id,tenant_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail=f"Bot with ID {bot_id} not found")
 
         # Delete the bot configuration
-        cursor.execute("DELETE FROM whatsapp_botconfig WHERE id = %s;", (bot_id,))
+        cursor.execute("DELETE FROM whatsapp_botconfig WHERE id = %s AND tenant_id = %s;", (bot_id,tenant_id))
         conn.commit()
 
         return {"message": f"Bot with ID {bot_id} and its logs deleted successfully"}
@@ -194,7 +199,8 @@ def delete_bot_config(bot_id):
             cursor.close()
         if conn:
             conn.close()
-def get_bots():
+
+def get_bots(tenant_id):
     try:
         # Connect to the PostgreSQL database
         conn = psycopg2.connect(**conn_config)
@@ -203,8 +209,9 @@ def get_bots():
        # Fetch all bot configurations
         cursor.execute("""
             SELECT *
-            FROM whatsapp_botconfig;
-        """)
+            FROM whatsapp_botconfig
+            WHERE tenant_id = %s;
+        """,(tenant_id,))
         bot_configs = cursor.fetchall()
         print(f"Fetched bot configurations: {bot_configs}")
 
@@ -251,14 +258,14 @@ def get_bots():
 
 
 
-def update_bot_config(bot_id,bot):
+def update_bot_config(bot_id,bot,tenant_id):
     try:
         # Connect to the PostgreSQL database
         conn = psycopg2.connect(**conn_config)
         cursor = conn.cursor()
 
         # Check if the bot exists
-        cursor.execute("SELECT id FROM whatsapp_botconfig WHERE id = %s;", (bot_id,))
+        cursor.execute("SELECT id FROM whatsapp_botconfig WHERE id = %s AND tenant_id;", (bot_id,tenant_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail=f"Bot with ID {bot_id} not found")
 
@@ -271,7 +278,7 @@ def update_bot_config(bot_id,bot):
             messagelimit = COALESCE(%s, messagelimit),
             replymessage = COALESCE(%s, replymessage),
             spamaction = COALESCE(%s, spamaction)
-        WHERE id = %s
+        WHERE id = %s AND tenant_id = %s
         """
         cursor.execute(
             update_query,
@@ -283,6 +290,7 @@ def update_bot_config(bot_id,bot):
                 bot.replyMessage,
                 bot.spamAction,
                 bot_id,
+                tenant_id,
             ),
         )
         conn.commit()
