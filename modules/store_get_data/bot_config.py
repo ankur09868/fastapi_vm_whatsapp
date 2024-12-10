@@ -17,7 +17,7 @@ def store_bot_config(bot:BotConfig,tenant_id):
         spam_action = bot.spamAction if bot.spamAction else None  # Handle None for string
         ai_detection = bot.aidetection if bot.aidetection is not None else False
         ai_reply = bot.aireply if bot.aireply is not None else False
-        prompt = bot.prompt if bot.prompt else ""
+        prompt = bot.aiSpamActionPrompt if bot.aiSpamActionPrompt else ""
         tenant_id = tenant_id
 
         logs = bot.logs if bot.logs else []
@@ -66,33 +66,28 @@ def fetch_bot_config_from_db(tenant_id):
         # Connect to the PostgreSQL database
         with psycopg2.connect(**conn_config) as conn:
             with conn.cursor() as cursor:
-                # Fetch all bot configurations
+                # Fetch all bot configurations for the tenant
                 cursor.execute("""
-                    SELECT *
+                    SELECT 
+                        id, name, isbotenabled, spamkeywords, messagelimit, replymessage, 
+                        spamaction, ai_detection, ai_reply, prompt, tenant_id
                     FROM whatsapp_botconfig
                     WHERE tenant_id = %s;
-                """,(tenant_id,))
+                """, (tenant_id,))
                 bot_configs = cursor.fetchall()
                 print(f"Fetched bot configurations: {bot_configs}")
 
                 if not bot_configs:
                     raise HTTPException(status_code=404, detail="No bot configurations found")
 
-                # Fetch logs for all bots in a single query
+                # Fetch logs for all bots associated with the tenant
                 cursor.execute("""
                     SELECT 
-                        bot_id, 
-                        id, 
-                        message, 
-                        action, 
-                        phone_or_name, 
-                        group_name, 
+                        bot_id, id, message, action, phone_or_name, group_name, 
                         timestamp::timestamp(0) AS timestamp
-                    FROM 
-                        whatsapp_bot_logs
-                    WHERE 
-                        tenant_id = %s;
-                """,(tenant_id,))
+                    FROM whatsapp_bot_logs
+                    WHERE tenant_id = %s;
+                """, (tenant_id,))
                 logs = cursor.fetchall()
                 print(f"Fetched all logs: {logs}")
 
@@ -107,20 +102,22 @@ def fetch_bot_config_from_db(tenant_id):
                     id=log_id,
                     message=message,
                     action=action,
-                    phone_or_name=phone_or_name or None,  # Use None if phone_or_name is empty or NULL
-                    group_name=group_name or None,  # Ensure group_name is None if missing
-                    time=timestamp or None  # Ensure timestamp is None if missing
+                    phone_or_name=phone_or_name or None,
+                    group_name=group_name or None,
+                    time=timestamp or None
                 )
             )
 
         # Prepare BotConfig objects
         bots = []
         for bot in bot_configs:
-            # Adjust unpacking to match the actual columns returned
-            bot_id, name, is_bot_enabled, spam_keywords, message_limit, reply_message, spam_action, ai_detection, ai_reply, prompt = bot
+            # Unpack bot configuration columns
+            (bot_id, name, is_bot_enabled, spam_keywords, message_limit, reply_message, 
+             spam_action, ai_detection, ai_reply, prompt, tenant_id) = bot
+
             print(f"Processing bot with id={bot_id}, name={name}")
 
-            # Parse spam_keywords
+            # Parse spam_keywords (ensure valid JSON or default to an empty list)
             if spam_keywords is None:
                 spam_keywords = []
             elif isinstance(spam_keywords, str):
@@ -132,11 +129,11 @@ def fetch_bot_config_from_db(tenant_id):
 
             print(f"spam_keywords for bot {bot_id}: {spam_keywords}")
 
-            # Get logs for this bot
+            # Retrieve logs for this bot
             bot_logs = logs_by_bot.get(bot_id, [])
             print(f"Logs for bot {bot_id}: {bot_logs}")
 
-            # Add bot configuration to the list
+            # Add bot configuration to the response list
             bots.append(
                 BotConfig(
                     id=bot_id,
@@ -149,7 +146,8 @@ def fetch_bot_config_from_db(tenant_id):
                     spamAction=spam_action,
                     aidetection=ai_detection,
                     aireply=ai_reply,
-                    prompt=prompt
+                    aiSpamActionPrompt=prompt,
+                    tenant_id=tenant_id
                 )
             )
 
@@ -162,8 +160,6 @@ def fetch_bot_config_from_db(tenant_id):
     except Exception as e:
         print(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
-
-
 
     finally:
         # Ensure proper cleanup
@@ -200,72 +196,16 @@ def delete_bot_config(bot_id,tenant_id):
         if conn:
             conn.close()
 
-def get_bots(tenant_id):
-    try:
-        # Connect to the PostgreSQL database
-        conn = psycopg2.connect(**conn_config)
-        cursor = conn.cursor()
-
-       # Fetch all bot configurations
-        cursor.execute("""
-            SELECT *
-            FROM whatsapp_botconfig
-            WHERE tenant_id = %s;
-        """,(tenant_id,))
-        bot_configs = cursor.fetchall()
-        print(f"Fetched bot configurations: {bot_configs}")
-
-        if not bot_configs:
-            raise HTTPException(status_code=404, detail="No bot configurations found")
-
-        # Prepare a list to hold the bot data
-        bots = []
-
-        # Fetch logs for each bot
-        for bot in bot_configs:
-            bot_id, name, is_bot_enabled, spam_keywords, message_limit, reply_message, spam_action,ai_detection,ai_reply,prompt = bot
-            print(f"Processing bot with id={bot_id}, name={name}")
-        
-           # Add the bot configuration and logs to the list
-            bots.append(
-                BotConfig(
-                    id=bot_id,
-                    name=name,
-                    isBotEnabled=is_bot_enabled,
-                    spamKeywords=spam_keywords,
-                    messageLimit=message_limit,
-                    replyMessage=reply_message,
-                    spamAction=spam_action,
-                    aidetection=ai_detection,
-                    aireply=ai_reply,
-                    prompt=prompt
-                )
-            )
-
-        # Return the list of bots
-        return {"bots": bots}
-
-    except Exception as e:
-        print(f"Error occurred: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
-
-    finally:
-        # Ensure proper cleanup
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
 
 
-
-def update_bot_config(bot_id,bot,tenant_id):
+def update_bot_config(bot_id, bot: BotConfig, tenant_id):
     try:
         # Connect to the PostgreSQL database
         conn = psycopg2.connect(**conn_config)
         cursor = conn.cursor()
 
         # Check if the bot exists
-        cursor.execute("SELECT id FROM whatsapp_botconfig WHERE id = %s AND tenant_id;", (bot_id,tenant_id))
+        cursor.execute("SELECT id FROM whatsapp_botconfig WHERE id = %s AND tenant_id = %s;", (bot_id, tenant_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail=f"Bot with ID {bot_id} not found")
 
@@ -277,22 +217,33 @@ def update_bot_config(bot_id,bot,tenant_id):
             spamkeywords = COALESCE(%s, spamkeywords),
             messagelimit = COALESCE(%s, messagelimit),
             replymessage = COALESCE(%s, replymessage),
-            spamaction = COALESCE(%s, spamaction)
+            spamaction = COALESCE(%s, spamaction),
+            prompt = COALESCE(%s, prompt),
+            ai_detection = COALESCE(%s, ai_detection),
+            ai_reply = COALESCE(%s, ai_reply)
         WHERE id = %s AND tenant_id = %s
         """
-        cursor.execute(
-            update_query,
-            (
-                bot.name,
-                bot.isBotEnabled,
-                json.dumps(bot.spamKeywords) if bot.spamKeywords else None,
-                bot.messageLimit,
-                bot.replyMessage,
-                bot.spamAction,
-                bot_id,
-                tenant_id,
-            ),
+
+        # Parameters for the query
+        params = (
+            bot.name,
+            bot.isBotEnabled,
+            json.dumps(bot.spamKeywords) if bot.spamKeywords else None,
+            bot.messageLimit,
+            bot.replyMessage,
+            bot.spamAction,
+            bot.aiSpamActionPrompt,
+            bot.aidetection,
+            bot.aireply,
+            bot_id,
+            tenant_id,
         )
+
+        # Log the parameters for debugging
+        print(f"Executing query with parameters: {params}")
+
+        # Execute the query
+        cursor.execute(update_query, params)
         conn.commit()
 
         return {"message": f"Bot with ID {bot_id} updated successfully"}
@@ -306,4 +257,3 @@ def update_bot_config(bot_id,bot,tenant_id):
             cursor.close()
         if conn:
             conn.close()
-   

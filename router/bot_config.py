@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status,Request
 from typing import List
 import psycopg2
 from modules.config.database import conn_config
-from modules.store_get_data.bot_config import fetch_bot_config_from_db,store_bot_config,delete_bot_config,update_bot_config,get_bots
+from modules.store_get_data.bot_config import fetch_bot_config_from_db,store_bot_config,delete_bot_config,update_bot_config
 from modules.model.bot_config import BotConfigResponse,BotConfig
 import json
 
@@ -26,20 +26,6 @@ async def get_bot_config(tenant:Request):
     except Exception as e:
         # Raise a detailed 500 Internal Server Error with the exception message
         raise HTTPException(status_code=500, detail=f"Error fetching bot configuration: {str(e)}")
-    
-@bot_config_router.get("/get_bots",response_model=BotConfig)
-async def get_bot(tenant:Request):
-    try:
-        tenant_id = tenant.headers.get("X-tenant-id")
-        if not tenant_id:
-            raise HTTPException(status_code=400, detail="tenant_id header is missing.")
-        bot = get_bots(tenant_id)
-        if not bot:
-            raise HTTPException(status_code=404, detail="Bots not found")
-        return bot
-    except Exception as e:
-        # Raise a detailed 500 Internal Server Error with the exception message
-        raise HTTPException(status_code=500, detail=f"Error fetching bots: {str(e)}")
 
 
 @bot_config_router.post("/add_bot_config", status_code=status.HTTP_201_CREATED)
