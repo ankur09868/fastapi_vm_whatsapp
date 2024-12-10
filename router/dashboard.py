@@ -58,10 +58,10 @@ async def get_dashboard(tenant:Request):
 
             # Fetch the last 10 topics data (from the same table)
             cursor.execute("""
-                SELECT topic_data, COUNT(*) AS frequency
+                SELECT topic_data::text AS topic, COUNT(*) AS frequency
                 FROM whatsapp_messages
                 WHERE group_name = %s AND tenant_id = %s
-                GROUP BY topic_data
+                GROUP BY topic_data::text
                 ORDER BY frequency DESC
                 LIMIT 10
             """, (group_name_str,tenant_id))
