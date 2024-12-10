@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from typing import Optional, List, Dict
 
 # New function to get group details by ID
-def get_group_details_by_id(group_id: int) -> Optional[Dict]:
+def get_group_details_by_id(group_id: int,tenant_id:str) -> Optional[Dict]:
     try:
         conn = psycopg2.connect(**conn_config)
         cursor = conn.cursor()
@@ -13,11 +13,11 @@ def get_group_details_by_id(group_id: int) -> Optional[Dict]:
         cursor.execute("""
             SELECT 
                 g.id, g.group_name, g.group_description,
-                m.id AS member_id, m.name, m.phone_number, m.role, m.status, m.rating, m.avatar
+                m.member_id AS member_id, m.name, m.phone_number, m.role, m.status, m.rating, m.avatar
             FROM whatsapp_groups g
             LEFT JOIN whatsapp_group_members m ON g.id = m.group_id
-            WHERE g.id = %s
-        """, (group_id,))
+            WHERE g.id = %s AND g.tenant_id = %s
+        """, (group_id,tenant_id))
 
         rows = cursor.fetchall()
 
@@ -31,17 +31,18 @@ def get_group_details_by_id(group_id: int) -> Optional[Dict]:
 
             # Loop through the results and structure the members
             for row in rows:
-                # Extract member details, check if they are available
-                member = {
-                    "id": row[3] if row[3] else None,  # member_id
-                    "name": row[4] if row[4] else None,
-                    "phone_number": row[5] if row[5] else None,
-                    "role": row[6] if row[6] else None,
-                    "status": row[7] if row[7] else None,
-                    "rating": row[8] if row[8] else None,
-                    "avatar": row[9] if row[9] else None
-                }
-                group_details["members"].append(member)
+                if any(field is not None for field in row[3:]):
+               
+                    member = {
+                        "id": row[3] if row[3] else None,  # member_id
+                        "name": row[4] if row[4] else None,
+                        "phone_number": row[5] if row[5] else None,
+                        "role": row[6] if row[6] else None,
+                        "status": row[7] if row[7] else None,
+                        "rating": row[8] if row[8] else None,
+                        "avatar": row[9] if row[9] else None
+                    }
+                    group_details["members"].append(member)
 
             return group_details
         else:
@@ -255,17 +256,17 @@ def get_groups_from_db(tenant_id):
                     "members": []
                 }
             
-            member = {
-                "id": member_id,
-                "name": member_name,
-                "phone_number": phone_number,
-                "role": role,
-                "status": status,
-                "rating": rating,
-                "avatar": avatar
-            }
-            
-            groups[group_id]["members"].append(member)
+            if any(field is not None for field in [member_id, member_name, phone_number, role, status, rating, avatar]):
+                member = {
+                    "id": member_id,
+                    "name": member_name,
+                    "phone_number": phone_number,
+                    "role": role,
+                    "status": status,
+                    "rating": rating,
+                    "avatar": avatar
+                }
+                groups[group_id]["members"].append(member)
 
         return list(groups.values())
     

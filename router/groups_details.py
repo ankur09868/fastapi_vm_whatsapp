@@ -43,7 +43,7 @@ async def get_group_details(id: int,tenant:Request):
         if not tenant_id:
             raise HTTPException(status_code=400, detail="tenant_id header is missing.")
         
-        group_details = get_group_details_by_id(id)
+        group_details = get_group_details_by_id(id,tenant_id)
 
         if group_details:
             return {"message": "Group details fetched successfully", "data": group_details}
