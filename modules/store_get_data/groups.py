@@ -152,7 +152,7 @@ def get_top_member(group_name):
         print(f"Error fetching top member: {e}")
         return None
 
-def get_group_activity(group_name):
+def get_group_activity(group_name,tenant_id):
     try:
 
         # Get messages per day
@@ -183,7 +183,7 @@ def get_group_activity(group_name):
 
 
 # Function to fetch member data
-def get_members_from_db():
+def get_members_from_db(tenant_id):
     try:
         # Establishing connection to the database
         conn = psycopg2.connect(**conn_config)
@@ -191,10 +191,11 @@ def get_members_from_db():
 
         # Query to get all members and their associated group
         cursor.execute("""
-            SELECT m.id, m.name, m.phone_number, m.role, m.status, m.rating, m.avatar, g.group_name
+            SELECT m.member_id, m.name, m.phone_number, m.role, m.status, m.rating, m.avatar, g.group_name
             FROM whatsapp_group_members m
-            JOIN whatsapp_groups g ON m.group_id = g.id;
-        """)
+            JOIN whatsapp_groups g ON m.group_id = g.id
+            WHERE tenant_id = %s;
+        """,(tenant_id,))
         
         rows = cursor.fetchall()
         members = []
@@ -225,7 +226,7 @@ def get_members_from_db():
             conn.close()
 
 # Function to fetch group and member data
-def get_groups_from_db():
+def get_groups_from_db(tenant_id):
     try:
         # Establishing connection to the database
         conn = psycopg2.connect(**conn_config)
@@ -236,8 +237,9 @@ def get_groups_from_db():
             SELECT g.id, g.group_name, g.group_description, 
                 m.member_id, m.name, m.phone_number, m.role, m.status, m.rating, m.avatar
             FROM whatsapp_groups g
-            LEFT JOIN whatsapp_group_members m ON g.id = m.group_id;
-        """)
+            LEFT JOIN whatsapp_group_members m ON g.id = m.group_id
+            WHERE g.tenant_id = %s;
+        """,(tenant_id,))
         
         rows = cursor.fetchall()
         groups = {}

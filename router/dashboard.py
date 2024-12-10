@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException,Request
 from modules.model.dashboard import DashboardResponse, SentimentData, EngagementData
 from modules.config.database import conn_config
 import psycopg2
@@ -9,14 +9,17 @@ from typing import List
 dashboard_router = APIRouter()
 
 @dashboard_router.get("/dashboard", response_model=List[DashboardResponse])
-async def get_dashboard():
+async def get_dashboard(tenant:Request):
     try:
+        tenant_id = tenant.headers.get("X-tenant-id")
+        if not tenant_id:
+            raise HTTPException(status_code=400, detail="tenant_id header is missing.")
         # Connect to the PostgreSQL database
         conn = psycopg2.connect(**conn_config)
         cursor = conn.cursor()
 
         # Fetch all group names from the database
-        cursor.execute("SELECT DISTINCT group_name FROM whatsapp_messages;")
+        cursor.execute("SELECT DISTINCT group_name FROM whatsapp_messages WHERE tenant_id = %s;",(tenant_id,))
         group_names = cursor.fetchall()  # Use fetchall() instead of fetchone() to get all groups
 
         if not group_names:
@@ -37,10 +40,10 @@ async def get_dashboard():
                     COALESCE(SUM((sentiment_data->>'Negative')::int), 0) AS Negative,
                     COALESCE(SUM((sentiment_data->>'Commercial')::int), 0) AS Commercial
                 FROM whatsapp_messages
-                WHERE group_name = %s
+                WHERE group_name = %s AND tenant_id = %s
                 GROUP BY message_time
                 ORDER BY message_time
-            """, (group_name_str,))
+            """, (group_name_str,tenant_id,))
 
             sentiment_data = [
                 SentimentData(
@@ -57,11 +60,11 @@ async def get_dashboard():
             cursor.execute("""
                 SELECT topic_data, COUNT(*) AS frequency
                 FROM whatsapp_messages
-                WHERE group_name = %s
+                WHERE group_name = %s AND tenant_id = %s
                 GROUP BY topic_data
                 ORDER BY frequency DESC
                 LIMIT 10
-            """, (group_name_str,))
+            """, (group_name_str,tenant_id))
 
             topics_data = [{"topic": topic, "frequency": frequency} for topic, frequency in cursor.fetchall()]
 
@@ -70,8 +73,8 @@ async def get_dashboard():
             cursor.execute("""
                 SELECT DISTINCT phone_number
                 FROM whatsapp_messages
-                WHERE group_name = %s AND message_time >= %s
-            """, (group_name_str, seven_days_ago))
+                WHERE group_name = %s AND tenant_id = %s AND message_time >= %s
+            """, (group_name_str,tenant_id, seven_days_ago))
 
             active_members = cursor.fetchall()
             active_members_count = len(active_members)
@@ -80,8 +83,8 @@ async def get_dashboard():
             cursor.execute("""
                 SELECT COUNT(DISTINCT phone_number)
                 FROM whatsapp_group_members
-                WHERE group_id = (SELECT group_id FROM whatsapp_groups WHERE group_name = %s)
-            """, (group_name_str,))
+                WHERE group_id = (SELECT group_id FROM whatsapp_groups WHERE group_name = %s AND tenant_id = %s)
+            """, (group_name_str,tenant_id))
             total_members = cursor.fetchone()[0]
 
             # Active Member Score Calculation
@@ -94,8 +97,8 @@ async def get_dashboard():
             cursor.execute("""
                 SELECT COUNT(*)
                 FROM whatsapp_messages
-                WHERE group_name = %s AND message_time >= %s
-            """, (group_name_str, seven_days_ago))
+                WHERE group_name = %s AND tenant_id = %s AND message_time >= %s
+            """, (group_name_str,tenant_id, seven_days_ago))
             total_messages_last_7_days = cursor.fetchone()[0]
 
             if total_messages_last_7_days > 0:
@@ -107,8 +110,8 @@ async def get_dashboard():
             cursor.execute("""
                 SELECT COUNT(*)
                 FROM whatsapp_messages
-                WHERE group_name = %s  AND message_time >= %s
-            """, (group_name_str, seven_days_ago))
+                WHERE group_name = %s  AND tenant_id = %s AND message_time >= %s
+            """, (group_name_str,tenant_id, seven_days_ago))
             response_messages = cursor.fetchone()[0]
 
             if total_messages_last_7_days > 0:

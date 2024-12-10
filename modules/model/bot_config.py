@@ -19,8 +19,9 @@ class BotConfig(BaseModel):
     spamAction: Optional[str] = None
     aidetection:Optional[bool] =False
     aireply: Optional[bool] =False
-    prompt:Optional[str] = None
+    aiSpamActionPrompt:Optional[str] = None
     logs: Optional[List[BotLog]] = []
+
     
 class BotConfigResponse(BaseModel):
     bots: List[BotConfig]

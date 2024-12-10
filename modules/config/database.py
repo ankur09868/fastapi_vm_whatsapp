@@ -1,6 +1,6 @@
 # Database connection configuration
 conn_config = {
-    'dbname': 'postgres',
+    'dbname': 'nurenpostgres_Whatsapp',
     'user': 'nurenai',
     'password': 'Biz1nurenWar*',
     'host': 'nurenaistore.postgres.database.azure.com',
