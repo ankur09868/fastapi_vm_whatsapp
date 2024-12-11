@@ -46,7 +46,7 @@ async def get_schedule_messages(tenant:Request):
     
 from typing import Any
 
-@router.put("/update_schedule_message/{message_id}", status_code=status.HTTP_200_OK)
+@router.put("/update_scheduled_message/{message_id}", status_code=status.HTTP_200_OK)
 async def update_scheduledmessage(message_id: int, updated_message: ScheduleMessageRequest,tenant:Request)-> Any:
     try:
          # Extract tenant_id from request headers
