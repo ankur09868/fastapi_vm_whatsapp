@@ -68,7 +68,7 @@ async def update_scheduledmessage(message_id: int, updated_message: ScheduleMess
         print(f"Unexpected error while updating message {message_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
     
-@router.delete("/delete_scheduled_message/{message_id}", status_code=status.HTTP_200_OK)
+@router.delete("/delete_scheduled_message/{message_id}/", status_code=status.HTTP_200_OK)
 async def delete_scheduled_message(message_id: int,tenant:Request):
     try:
         tenant_id = tenant.headers.get("X-tenant-id")
