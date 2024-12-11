@@ -62,7 +62,7 @@ async def get_activity(group_name: str,tenant:Request):
         if not tenant_id:
             raise HTTPException(status_code=400, detail="tenant_id header is missing.")
         
-        grp_activity = get_group_activity(group_name)
+        grp_activity = get_group_activity(group_name,tenant_id)
 
         if grp_activity:
             return {"message": "Group activity fetched successfully", "data": grp_activity}
