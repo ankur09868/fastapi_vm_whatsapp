@@ -244,14 +244,14 @@ def update_schedule_message(message_id,updated_message,tenant_id):
             conn.close()
 
 
-def delete_schedule_message(message_id):
+def delete_schedule_message(message_id,tenant_id):
     try:
         conn = psycopg2.connect(**conn_config)
         cursor = conn.cursor()
 
         # Delete query
-        delete_query = "DELETE FROM whatsapp_scheduled_messages WHERE id = %s"
-        cursor.execute(delete_query, (message_id,))
+        delete_query = "DELETE FROM whatsapp_scheduled_messages WHERE id = %s AND tenant_id = %s"
+        cursor.execute(delete_query, (message_id,tenant_id))
         conn.commit()
 
         # Check if delete succeeded
