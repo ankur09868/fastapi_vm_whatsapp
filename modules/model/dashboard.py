@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List 
+from typing import List ,Optional
 
 # Model to structure the sentiment data
 class SentimentData(BaseModel):
@@ -16,6 +16,6 @@ class EngagementData(BaseModel):
     score: float
 class DashboardResponse(BaseModel):
     name: str
-    sentimentData: List[SentimentData]
-    engagementData: List[EngagementData]
-    topicsData: List[dict]
+    sentimentData: Optional[List[SentimentData]] = None
+    engagementData: Optional[List[EngagementData]] = None
+    topicsData: Optional[List[dict]] = None
