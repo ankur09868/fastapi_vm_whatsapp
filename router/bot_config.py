@@ -19,6 +19,7 @@ async def get_bot_config(tenant:Request):
         
         # Attempt to fetch bot configuration from the database
         bot_config = fetch_bot_config_from_db(tenant_id)
+        print(bot_config)
         if not bot_config:
             # If no bot config is found, raise a 404 not found error
             raise HTTPException(status_code=404, detail="Bot configuration not found")
@@ -29,19 +30,53 @@ async def get_bot_config(tenant:Request):
 
 
 @bot_config_router.post("/add_bot_config", status_code=status.HTTP_201_CREATED)
-async def add_bot_config(bot: BotConfig,tenant:Request):
+async def add_bot_config(bot: BotConfig, tenant: Request):
     try:
+        # Print incoming bot configuration details
+        print(f"Received Bot Configuration: {bot.dict()}")
+        
+        # Print tenant ID extraction
         tenant_id = tenant.headers.get("X-tenant-id")
+        print(f"Extracted Tenant ID: {tenant_id}")
+        
+        # Validate tenant ID
         if not tenant_id:
+            print("ERROR: No tenant ID provided in headers")
             raise HTTPException(status_code=400, detail="tenant_id header is missing.")
         
+        # Print attempt to store bot configuration
+        print(f"Attempting to store bot configuration for tenant {tenant_id}")
+        
         # Attempt to add the bot configuration to the database
-        add_bot = store_bot_config(bot,tenant_id)
+        try:
+            add_bot = store_bot_config(bot, tenant_id)
+            print(f"Store bot config result: {add_bot}")
+        except Exception as store_error:
+            print(f"Error in store_bot_config: {store_error}")
+            raise
+        
+        # Check if bot configuration was successfully added
         if not add_bot:
-            # If the bot config couldn't be added, raise a 400 error
+            print("Failed to add bot configuration")
             raise HTTPException(status_code=400, detail="Failed to add bot configuration. Please check the input data.")
+        
+        print("Bot configuration added successfully")
         return {"message": "Bot configuration added successfully"}
+    
+    except HTTPException as http_error:
+        # Log HTTP exceptions with their specific details
+        print(f"HTTP Exception: {http_error.status_code} - {http_error.detail}")
+        raise
+    
     except Exception as e:
+        # Print full exception details for unexpected errors
+        print(f"Unexpected Error: {type(e).__name__}")
+        print(f"Error Details: {str(e)}")
+        print(f"Error Args: {e.args}")
+        import traceback
+        print("Full Traceback:")
+        traceback.print_exc()
+        
         # Raise a detailed 500 Internal Server Error with the exception message
         raise HTTPException(status_code=500, detail=f"Error adding bot configuration: {str(e)}")
 

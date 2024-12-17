@@ -11,6 +11,7 @@ class BotLog(BaseModel):
     time: Optional[datetime] = None
 
 class BotConfig(BaseModel):
+    id: Optional[int]
     name: Optional[str] = None 
     isBotEnabled: Optional[bool] = True
     spamKeywords: Optional[List[str]] = ['spam']
