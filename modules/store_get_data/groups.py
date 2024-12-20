@@ -4,59 +4,80 @@ from fastapi import HTTPException
 from typing import Optional, List, Dict
 
 # New function to get group details by ID
-def get_group_details_by_id(group_id: int,tenant_id:str) -> Optional[Dict]:
+from typing import Optional, Dict, List
+import psycopg2
+
+from typing import Optional, Dict
+import psycopg2
+
+def get_group_details_by_id(group_id: int, tenant_id: str) -> Optional[Dict]:
+    conn = None
+    cursor = None
     try:
         conn = psycopg2.connect(**conn_config)
         cursor = conn.cursor()
 
-        # Fetch group details along with member details
+        # Fetch group details and member details in a single query
         cursor.execute("""
             SELECT 
-                g.id, g.group_name, g.group_description,g.botconfig_id,
-                m.member_id AS member_id, m.name, m.phone_number, m.role, m.status, m.rating, m.avatar
+                g.id AS group_id, 
+                g.group_name, 
+                g.group_description,
+                g.botconfig_id,
+                m.member_id,
+                m.name AS member_name,
+                m.phone_number,
+                m.role,
+                m.status,
+                m.rating,
+                m.avatar
             FROM whatsapp_groups g
             LEFT JOIN whatsapp_group_members m ON g.id = m.group_id
             WHERE g.id = %s AND g.tenant_id = %s
-        """, (group_id,tenant_id))
+        """, (group_id, tenant_id))
 
         rows = cursor.fetchall()
 
-        if rows:
-            # Initialize group dictionary
-            group_details = {
-                "group_name": rows[0][1],  # group_name from the first row
-                "group_description": rows[0][2],  # group_description from the first row
-                "bot_id":row[0][3],
-                "members": []
-            }
-
-            # Loop through the results and structure the members
-            for row in rows:
-                if any(field is not None for field in row[3:]):
-               
-                    member = {
-                        "id": row[3] if row[3] else None,  # member_id
-                        "name": row[4] if row[4] else None,
-                        "phone_number": row[5] if row[5] else None,
-                        "role": row[6] if row[6] else None,
-                        "status": row[7] if row[7] else None,
-                        "rating": row[8] if row[8] else None,
-                        "avatar": row[9] if row[9] else None
-                    }
-                    group_details["members"].append(member)
-
-            return group_details
-        else:
+        # If no rows are returned, the group doesn't exist
+        if not rows:
             return None
+
+        # Process the first row for group-level details
+        group_details = {
+            "group_id": rows[0][0],
+            "group_name": rows[0][1],
+            "group_description": rows[0][2],
+            "botconfig_id": rows[0][3],
+            "members": []
+        }
+
+        # Process member-level details
+        members = [
+            {
+                "member_id": row[4],
+                "name": row[5],
+                "phone_number": row[6],
+                "role": row[7],
+                "status": row[8],
+                "rating": row[9],
+                "avatar": row[10]
+            }
+            for row in rows if row[4]  # Only include rows with a valid member_id
+        ]
+
+        group_details["members"] = members
+        return group_details
 
     except Exception as e:
         print(f"Error fetching group details from database: {e}")
         return None
 
     finally:
-        if conn:
+        if cursor:
             cursor.close()
+        if conn:
             conn.close()
+
     
 def get_messages_per_day(group_name, tenant_id):
     try:
@@ -281,6 +302,8 @@ def get_groups_from_db(tenant_id):
 
 # Function to update the botconfig_id in the database
 def update_botconfig_in_db(group_id: int, tenant_id: str, botconfig_id: int):
+    conn = None
+    cursor = None
     try:
         # Establish a database connection
         conn = psycopg2.connect(**conn_config)
@@ -295,22 +318,27 @@ def update_botconfig_in_db(group_id: int, tenant_id: str, botconfig_id: int):
 
         # Check if any rows were updated
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Group not found or botconfig_id not updated.")
+            return {"status": "error", "detail": "Group not found or botconfig_id not updated."}
 
         # Commit the changes
         conn.commit()
         print(f"Updated botconfig_id for group ID {group_id} and tenant {tenant_id}.")
+        return {"status": "success", "message": f"botconfig_id updated successfully for group ID {group_id}"}
 
     except Exception as e:
-        print(f"Error updating botconfig_id in DB: {e}")
-        conn.rollback()
-        raise
+        # Rollback on error and return the exception details
+        if conn:
+            conn.rollback()
+        error_message = f"Error updating botconfig_id in DB: {e}"
+        print(error_message)
+        return {"status": "error", "detail": error_message}
 
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
+
 
 def delete_group(group_name: str, tenant_id: str):
     try:

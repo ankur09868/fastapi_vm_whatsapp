@@ -75,7 +75,7 @@ def get_activity(group_name: str,tenant:Request):
     
 
 @router.post("/group_update_botconfig/{group_id}")
-def update_botconfig(group_id: int, request: Request):
+async def update_botconfig(group_id: int, request: Request):
     try:
         # Extract tenant_id from request headers
         tenant_id = request.headers.get("X-tenant-id")
@@ -83,7 +83,7 @@ def update_botconfig(group_id: int, request: Request):
             raise HTTPException(status_code=400, detail="tenant_id header is missing.")
         
         # Get botconfig_id from request body (parsed as JSON)
-        request_data = request.json()  # Parse the JSON body
+        request_data = await request.json()  # Await the coroutine
         botconfig_id = request_data.get("botconfig_id")
 
         if not botconfig_id:
@@ -98,7 +98,7 @@ def update_botconfig(group_id: int, request: Request):
         # Log the error for debugging
         print(f"Error updating botconfig_id: {e}")
         raise HTTPException(status_code=500, detail="Failed to update botconfig_id.")
-
+    
 @router.delete("/delete_group/{group_name}")
 def delete_group_endpoint(group_name: str, req: Request):
     try:
