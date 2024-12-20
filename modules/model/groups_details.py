@@ -16,4 +16,5 @@ class Group(BaseModel):
     name: str
     description: str
     members: List[Member]
+    botconfg_id = int
 

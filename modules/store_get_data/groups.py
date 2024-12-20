@@ -12,7 +12,7 @@ def get_group_details_by_id(group_id: int,tenant_id:str) -> Optional[Dict]:
         # Fetch group details along with member details
         cursor.execute("""
             SELECT 
-                g.id, g.group_name, g.group_description,
+                g.id, g.group_name, g.group_description,g.botconfig_id,
                 m.member_id AS member_id, m.name, m.phone_number, m.role, m.status, m.rating, m.avatar
             FROM whatsapp_groups g
             LEFT JOIN whatsapp_group_members m ON g.id = m.group_id
@@ -26,6 +26,7 @@ def get_group_details_by_id(group_id: int,tenant_id:str) -> Optional[Dict]:
             group_details = {
                 "group_name": rows[0][1],  # group_name from the first row
                 "group_description": rows[0][2],  # group_description from the first row
+                "bot_id":row[0][3],
                 "members": []
             }
 
@@ -180,131 +181,6 @@ def get_group_activity(group_name, tenant_id):
     except Exception as e:
         print(f"Error fetching group activity: {e}")
         return None
-# def get_messages_per_day(group_name,tenant_id):
-#     try:
-#         conn = psycopg2.connect(**conn_config)
-#         cursor = conn.cursor()
-
-#         # SQL Query to get messages sent each day
-#         query = """
-#             SELECT DATE(message_time) AS message_date, COUNT(*) AS message_count
-#             FROM whatsapp_messages
-#             WHERE group_name = %s AND tenant_id = %s
-#             GROUP BY DATE(message_time)
-#             ORDER BY message_date;
-#         """
-#         cursor.execute(query, (group_name,tenant_id))
-#         rows = cursor.fetchall()
-
-#         messages_per_day = [{"message_date": row[0], "message_count": row[1]} for row in rows]
-
-#         conn.close()
-#         return messages_per_day
-#     except Exception as e:
-#         print(f"Error fetching messages per day: {e}")
-#         return []
-
-# def get_total_messages(group_name):
-#     try:
-#         conn = psycopg2.connect(**conn_config)
-#         cursor = conn.cursor()
-
-#         # SQL Query to get the total message count
-#         query = """
-#             SELECT COUNT(*) 
-#             FROM whatsapp_messages
-#             WHERE group_name = %s;
-#         """
-#         cursor.execute(query, (group_name,))
-#         total_messages = cursor.fetchone()[0]
-
-#         conn.close()
-#         return total_messages
-#     except Exception as e:
-#         print(f"Error fetching total messages: {e}")
-#         return 0
-
-# def get_active_members(group_name, days=2):
-#     try:
-#         conn = psycopg2.connect(**conn_config)
-#         cursor = conn.cursor()
-
-#         # SQL Query to find members who posted every day in the past 'days' (default 7)
-#         query = f"""
-#             SELECT sender
-#             FROM whatsapp_messages
-#             WHERE group_name = %s AND message_time >= (CURRENT_TIMESTAMP + INTERVAL '5 hours 30 minutes') - %s * INTERVAL '1 day'
-#             GROUP BY sender, DATE(message_time)
-#             HAVING COUNT(DISTINCT DATE(message_time)) = %s;
-#         """
-#         cursor.execute(query, (group_name,days,days))
-#         active_members = [row[0] for row in cursor.fetchall()]
-
-#         conn.close()
-#         return active_members
-#     except Exception as e:
-#         print(f"Error fetching active members: {e}")
-#         return []
-
-# def get_top_member(group_name):
-#     try:
-#         conn = psycopg2.connect(**conn_config)
-#         cursor = conn.cursor()
-
-#         # SQL Query to get the member who sent the most messages
-#         query = """
-#             SELECT sender, COUNT(*) AS message_count
-#             FROM whatsapp_messages
-#             WHERE group_name = %s
-#             GROUP BY sender
-#             ORDER BY message_count DESC
-#             LIMIT 1;
-#         """
-#         cursor.execute(query, (group_name,))
-#         top_member_row = cursor.fetchone()
-
-#         top_member = None
-#         if top_member_row:
-#             top_member = {
-#                 "sender": top_member_row[0],
-#                 "message_count": top_member_row[1]
-#             }
-
-#         conn.close()
-#         return top_member
-#     except Exception as e:
-#         print(f"Error fetching top member: {e}")
-#         return None
-
-# def get_group_activity(group_name,tenant_id):
-#     try:
-
-#         # Get messages per day
-#         messages_per_day = get_messages_per_day(group_name,tenant_id)
-
-#         # Get total messages
-#         total_messages = get_total_messages(group_name,tenant_id)
-
-#         # Get active members (who posted at least once every day in the last 7 days)
-#         active_members = get_active_members(group_name,tenant_id)
-
-#         # Get top member (who sent the most messages)
-#         top_member = get_top_member(group_name,tenant_id)
-
-#         # Prepare response
-#         group_activity = {
-#             "group_name": group_name,
-#             "messages_per_day": messages_per_day,
-#             "total_messages": total_messages,
-#             "active_members": active_members,
-#             "top_member": top_member
-#         }
-
-#         return group_activity
-#     except Exception as e:
-#         print(f"Error fetching group activity: {e}")
-#         return None
-
 
 # Function to fetch member data
 def get_members_from_db(tenant_id):
@@ -400,4 +276,70 @@ def get_groups_from_db(tenant_id):
     finally:
         if conn:
             cursor.close()
+            conn.close()
+
+
+# Function to update the botconfig_id in the database
+def update_botconfig_in_db(group_id: int, tenant_id: str, botconfig_id: int):
+    try:
+        # Establish a database connection
+        conn = psycopg2.connect(**conn_config)
+        cursor = conn.cursor()
+
+        # Update the botconfig_id for the specified group and tenant
+        cursor.execute("""
+            UPDATE whatsapp_groups
+            SET botconfig_id = %s
+            WHERE id = %s AND tenant_id = %s;
+        """, (botconfig_id, group_id, tenant_id))
+
+        # Check if any rows were updated
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Group not found or botconfig_id not updated.")
+
+        # Commit the changes
+        conn.commit()
+        print(f"Updated botconfig_id for group ID {group_id} and tenant {tenant_id}.")
+
+    except Exception as e:
+        print(f"Error updating botconfig_id in DB: {e}")
+        conn.rollback()
+        raise
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def delete_group(group_name: str, tenant_id: str):
+    try:
+        # Establish a database connection
+        conn = psycopg2.connect(**conn_config)
+        cursor = conn.cursor()
+
+        # Delete the group from the database
+        cursor.execute("""
+            DELETE FROM whatsapp_groups
+            WHERE group_name = %s AND tenant_id = %s;
+        """, (group_name, tenant_id))
+
+        # Commit the changes
+        conn.commit()
+
+        # Check if any rows were deleted
+        if cursor.rowcount == 0:
+            return None  # No group was deleted
+
+        print(f"Deleted group {group_name} for tenant {tenant_id}.")
+        return group_name  # Return the deleted group's name
+
+    except Exception as e:
+        print(f"Error deleting group from DB: {e}")
+        raise HTTPException(status_code=500, detail="Database operation failed.")
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
             conn.close()
