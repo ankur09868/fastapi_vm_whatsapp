@@ -76,8 +76,10 @@ def fetch_bot_config_from_db(tenant_id):
                 bot_configs = cursor.fetchall()
                 print(f"Fetched bot configurations: {bot_configs}")
 
+                # Check if no bot configurations are found
                 if not bot_configs:
-                    raise HTTPException(status_code=404, detail="No bot configurations found")
+                    print("No bot configurations found for the given tenant_id.")
+                    return BotConfigResponse(bots=[], detail="No bot found")
 
                 # Fetch logs for all bots associated with the tenant
                 cursor.execute("""

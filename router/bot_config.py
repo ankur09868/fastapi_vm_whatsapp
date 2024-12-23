@@ -22,7 +22,7 @@ async def get_bot_config(tenant:Request):
         print(bot_config)
         if not bot_config:
             # If no bot config is found, raise a 404 not found error
-            raise HTTPException(status_code=404, detail="Bot configuration not found")
+            raise HTTPException(status_code=200, detail="Bot configuration not found")
         return bot_config
     except Exception as e:
         # Raise a detailed 500 Internal Server Error with the exception message
