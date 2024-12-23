@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional,Dict
 from datetime import datetime
 
 class BotLog(BaseModel):
@@ -14,10 +14,9 @@ class BotConfig(BaseModel):
     id: Optional[int]
     name: Optional[str] = None 
     isBotEnabled: Optional[bool] = True
-    spamKeywords: Optional[List[str]] = ['spam']
+    spamKeywordsActions: Optional[Dict[str, str]] = {"spam": "warn"}
     messageLimit: Optional[int] = 5
     replyMessage: Optional[str] = None
-    spamAction: Optional[str] = None
     aidetection:Optional[bool] =False
     aireply: Optional[bool] =False
     aiSpamActionPrompt:Optional[str] = None
