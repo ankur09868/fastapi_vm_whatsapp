@@ -31,39 +31,81 @@ async def get_dashboard(tenant: Request):
         for group_name in group_names:
             group_name_str = group_name[0]
 
-            # Fetch sentiment data
             cursor.execute("""
-                SELECT message_time, 
+                SELECT 
+                    group_name,
                     COALESCE(SUM((sentiment_data->>'Positive')::int), 0) AS Positive,
                     COALESCE(SUM((sentiment_data->>'Neutral')::int), 0) AS Neutral,
                     COALESCE(SUM((sentiment_data->>'Negative')::int), 0) AS Negative,
-                    COALESCE(SUM((sentiment_data->>'Commercial')::int), 0) AS Commercial
-                FROM whatsapp_messages
-                WHERE group_name = %s AND tenant_id = %s
-                GROUP BY message_time
-                ORDER BY message_time
+                    COALESCE(SUM((sentiment_data->>'Commercial')::int), 0) AS Commercial,
+                    topic_data::text AS topic, COUNT(*) AS frequency
+                FROM 
+                    whatsapp_sentiment
+                WHERE 
+                    group_name = %s AND tenant_id = %s
+                GROUP BY 
+                    group_name, topic_data::text
+                ORDER BY 
+                    frequency DESC
+                LIMIT 10
             """, (group_name_str, tenant_id))
-            sentiment_data = [
-                SentimentData(
-                    day=datetime.strftime(message_time, '%A'),
+
+            data = cursor.fetchall()
+
+            # You can now iterate over `data` and separate sentiment and topics:
+            sentiment_data = []
+            topics_data = []
+
+            for row in data:
+                group_name_str = row[0]
+                positive = row[1]
+                neutral = row[2]
+                negative = row[3]
+                commercial = row[4]
+                topic = row[5]
+                frequency = row[6]
+
+                sentiment_data.append(SentimentData(
+                    day=datetime.strftime(datetime.now(), '%A'),  # you can adjust this logic based on how you want to store the day
                     Positive=positive,
                     Neutral=neutral,
                     Negative=negative,
                     Commercial=commercial
-                )
-                for message_time, positive, neutral, negative, commercial in cursor.fetchall()
-            ] or None  # Set to None if empty
+                ))
 
-            # Fetch topics data
-            cursor.execute("""
-                SELECT topic_data::text AS topic, COUNT(*) AS frequency
-                FROM whatsapp_messages
-                WHERE group_name = %s AND tenant_id = %s
-                GROUP BY topic_data::text
-                ORDER BY frequency DESC
-                LIMIT 10
-            """, (group_name_str, tenant_id))
-            topics_data = [{"topic": topic, "frequency": frequency} for topic, frequency in cursor.fetchall()] or None
+                topics_data.append({"topic": topic, "frequency": frequency})
+
+            # # Fetch sentiment data
+            # cursor.execute("""
+            #     SELECT group_name, 
+            #         COALESCE(SUM((sentiment_data->>'Positive')::int), 0) AS Positive,
+            #         COALESCE(SUM((sentiment_data->>'Neutral')::int), 0) AS Neutral,
+            #         COALESCE(SUM((sentiment_data->>'Negative')::int), 0) AS Negative,
+            #         COALESCE(SUM((sentiment_data->>'Commercial')::int), 0) AS Commercial
+            #     FROM whatsapp_sentiment
+            #     WHERE group_name = %s AND tenant_id = %s
+            # """, (group_name_str, tenant_id))
+            # sentiment_data = [
+            #     SentimentData(
+            #         day=datetime.strftime(message_time, '%A'),
+            #         Positive=positive,
+            #         Neutral=neutral,
+            #         Negative=negative,
+            #         Commercial=commercial
+            #     )
+            #     for message_time, positive, neutral, negative, commercial in cursor.fetchall()
+            # ] or None  # Set to None if empty
+
+            # # Fetch topics data
+            # cursor.execute("""
+            #     SELECT topic_data::text AS topic, COUNT(*) AS frequency
+            #     FROM whatsapp_sentiment
+            #     WHERE group_name = %s AND tenant_id = %s
+            #     GROUP BY topic_data::text
+            #     ORDER BY frequency DESC
+            #     LIMIT 10
+            # """, (group_name_str, tenant_id))
+            # topics_data = [{"topic": topic, "frequency": frequency} for topic, frequency in cursor.fetchall()] or None
 
             # Engagement data calculation
             seven_days_ago = datetime.now() - timedelta(days=7)

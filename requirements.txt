@@ -7,3 +7,5 @@ psycopg2
 validators
 typing-extensions
 pytz
+openai== 1.37.1
+apscheduler==3.10.4

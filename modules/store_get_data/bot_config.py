@@ -87,7 +87,9 @@ def fetch_bot_config_from_db(tenant_id):
                         bot_id, id, message, action, phone_or_name, group_name, 
                         timestamp::timestamp(0) AS timestamp
                     FROM whatsapp_bot_logs
-                    WHERE tenant_id = %s;
+                    WHERE tenant_id = %s
+                    ORDER BY timestamp DESC
+                    LIMIT 10;
                 """, (tenant_id,))
                 logs = cursor.fetchall()
                 print(f"Fetched all logs: {logs}")
